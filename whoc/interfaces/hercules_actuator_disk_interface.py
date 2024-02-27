@@ -42,6 +42,8 @@ class HerculesADInterface(InterfaceBase):
         turbine_powers = hercules_dict["hercules_comms"]["amr_wind"][self.wf_name]["turbine_powers"]
         time = hercules_dict["time"]
 
+        wind_speed = hercules_dict["hercules_comms"]["amr_wind"][self.wf_name]["wind_speed"]
+
         if "wind_power_reference" in hercules_dict["external_signals"]:
             wind_power_reference = hercules_dict["external_signals"]["wind_power_reference"]
         else:
@@ -53,6 +55,7 @@ class HerculesADInterface(InterfaceBase):
             # "wind_speeds":wind_speeds,
             "turbine_powers": turbine_powers,
             "wind_power_reference": wind_power_reference,
+            "wind_speed": wind_speed,
         }
 
         return measurements

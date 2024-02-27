@@ -4,4 +4,6 @@ from whoc.controllers.wind_battery_controller import WindBatteryController
 from whoc.controllers.wind_farm_power_tracking_controller import (
     WindFarmPowerDistributingController,
     WindFarmPowerTrackingController,
+    WindPowerSupervisoryControl,
 )
+from whoc.controllers.supervisory_controller import HybridController
