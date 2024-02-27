@@ -14,9 +14,17 @@ class HybridController(WindFarmPowerDistributingController):
         self.gains = {'eta': 0.4, 'beta': 1.0}
         self.umax = np.array([3500.0]).reshape((self.nu,1))
         self.umin = np.array([0.0]).reshape((self.nu,1))
+        self.num_turbines = 2.0
 
+        # Initialize time
         self.k = 0
 
+        self.params = {}
+        self.params['wind_speed'] = 0.0
+        self.params['load_ref'] = 0.0
+        self.params['wind_power_curve_poly_vals'] = [  2.88615726 , 9.27308031, -35.0947898,  -14.43546939]
+
+        # Setup hybrid control
         self.setup_control()
 
     def setup_control(self):
@@ -27,18 +35,23 @@ class HybridController(WindFarmPowerDistributingController):
         nablaH = lambda u, k, A=A: A.T  # Gradient of input-output mapping
 
         # Define cost function
-        Cv = lambda y, u, k, yd: 0.5 * (y - yd) ** 2
-        nablaC = lambda y, u, k, yd: nablaH(u, k) @ (y - yd)
+        Cv = lambda y, u, k, params: 0.5 * (y - params['load_ref']) ** 2
+        nablaC = lambda y, u, k, params: nablaH(u, k) @ (y - params['load_ref'])
 
         # Output Constraints: (h for equality constraints, g for inequality constraints)
-        h0 = lambda y, u, k, yd: y - yd
-        nablah0 = lambda y, u, k, yd: nablaH(u, k) @ np.eye(self.ny)
+        h0 = lambda y, u, k, params: y - params['load_ref']
+        nablah0 = lambda y, u, k, params: nablaH(u, k) @ np.eye(self.ny)
 
         # input constraints: (h for equality constraints, g for inequality constraints)
-        g0 = lambda y, u, k, w, umax=self.umax: u - umax
-        g1 = lambda y, u, k, w, umin=self.umin: umin - u
-        nablag0 = lambda y, u, k, w: np.eye(self.nu)
-        nablag1 = lambda y, u, k, w: -np.eye(self.nu)
+        g0 = lambda y, u, k, params, umax=self.umax: u - umax
+        g1 = lambda y, u, k, params, umin=self.umin: umin - u
+        power_vals = self.params['wind_power_curve_poly_vals']
+        power_curve = lambda v, vals=power_vals: self.num_turbines*np.array([np.polyval(vals, v)]).reshape((self.nu,1))
+        self.power_curve = power_curve
+        g2 = lambda y, u, k, params, power_curve=power_curve: u - min(self.umax, power_curve(params['wind_speed']))
+        nablag0 = lambda y, u, k, params: np.eye(self.nu)
+        nablag1 = lambda y, u, k, params: -np.eye(self.nu)
+        nablag2 = lambda y, u, k, params: np.eye(self.nu)
 
         # Setup constraints
         equal_constraints = {}
@@ -48,12 +61,14 @@ class HybridController(WindFarmPowerDistributingController):
         # grad_equal_constraints[0] = nablah0
 
         inequal_constraints = {}
-        inequal_constraints[0] = g0
-        inequal_constraints[1] = g1
+        inequal_constraints[0] = g1
+        inequal_constraints[1] = g2
+        #inequal_constraints[2] = g0
 
         grad_inequal_constraints = {}
-        grad_inequal_constraints[0] = nablag0
-        grad_inequal_constraints[1] = nablag1
+        grad_inequal_constraints[0] = nablag1
+        grad_inequal_constraints[1] = nablag2
+        #grad_inequal_constraints[2] = nablag0
 
         constraints = {'equal': equal_constraints, 'inequal': inequal_constraints}
         grad_constraints = {'equal': grad_equal_constraints, 'inequal': grad_inequal_constraints}
@@ -79,10 +94,14 @@ class HybridController(WindFarmPowerDistributingController):
 
         # TO DO: Replace with desired load reference
         ref = self.measurements_dict["wind_power_reference"]
+        self.params['load_ref'] = ref
+        self.params['wind_speed'] = wind_speed
+        print('wind_speed = '+str(wind_speed))
+        print('max power =' +str(self.power_curve(wind_speed)))
 
         # Apply hybrid control after initialization
         if self.k > 2.0:
-            supervisory_reference = self.fo_control(y=np.array([[farm_current_power]]), k=self.k, w=np.array([[ref]]) )
+            supervisory_reference = self.fo_control(y=np.array([[farm_current_power]]), k=self.k, w=self.params )
         else:
             supervisory_reference = self.fo_control.uk
         self.k += self.dt
