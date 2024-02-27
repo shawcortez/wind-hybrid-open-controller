@@ -38,10 +38,6 @@ class HybridController(WindFarmPowerDistributingController):
         Cv = lambda y, u, k, params: 0.5 * (y - params['load_ref']) ** 2
         nablaC = lambda y, u, k, params: nablaH(u, k) @ (y - params['load_ref'])
 
-        # Output Constraints: (h for equality constraints, g for inequality constraints)
-        h0 = lambda y, u, k, params: y - params['load_ref']
-        nablah0 = lambda y, u, k, params: nablaH(u, k) @ np.eye(self.ny)
-
         # input constraints: (h for equality constraints, g for inequality constraints)
         g0 = lambda y, u, k, params, umax=self.umax: u - umax
         g1 = lambda y, u, k, params, umin=self.umin: umin - u
