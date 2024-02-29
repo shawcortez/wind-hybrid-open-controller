@@ -1,36 +1,43 @@
 import casadi as cs
 import numpy as np
-from whoc.controllers.wind_farm_power_tracking_controller import WindFarmPowerDistributingController
+#from whoc.controllers.wind_farm_power_tracking_controller import WindFarmPowerDistributingController
+from whoc.controllers.wind_farm_power_tracking_controller import WindFarmPowerTrackingController
 
-class HybridController(WindFarmPowerDistributingController):
+class HybridController(WindFarmPowerTrackingController): #HybridController(WindFarmPowerDistributingController):
 
     def __init__(self, interface, input_dict, verbose=False):
         super().__init__(interface, input_dict, verbose=verbose)
 
         # TO DO grab info from input_dict
         self.ny = 1
-        self.nu = 1
-        self.dt = 0.5
-        self.gains = {'eta': 0.4, 'beta': 1.0}
+        self.nu = len(input_dict['components'])
+        self.components = input_dict['components']
+        self.dt = input_dict['dt']
+        self.gains = input_dict['hybrid_controller']['gains'] #{'eta': 0.4, 'beta': 1.0}
         self.umax = np.array([3500.0]).reshape((self.nu,1))
         self.umin = np.array([0.0]).reshape((self.nu,1))
-        self.num_turbines = 2.0
+        self.num_turbines = input_dict['controller']['num_turbines']
 
         # Initialize time
         self.k = 0
 
         self.params = {}
-        self.params['wind_speed'] = 0.0
-        self.params['load_ref'] = 0.0
-        self.params['wind_power_curve_poly_vals'] = [  2.88615726 , 9.27308031, -35.0947898,  -14.43546939]
+        if 'wind' in self.components:
+            self.params['wind_speed'] = 0.0
+            self.params['load_ref'] = 0.0
+            wind_power_vals = input_dict['hybrid_controller']['power_curve']['wind']
+            self.wind_power_curve = lambda v, vals=wind_power_vals: self.num_turbines * np.array([np.polyval(vals, v)]).reshape((1, 1))
 
         # Setup hybrid control
         self.setup_control()
 
     def setup_control(self):
 
+        dh_du = []
+        if 'wind' in self.components:
+            dh_du.append(1.0)
         # Define outer-loop input-output mapping
-        A = np.array([[1.0]])
+        A = np.array(dh_du).reshape((self.nu, 1))
         # H = lambda u, k, A=A, d=d: A @ u + d(k)  # Input-output mapping
         nablaH = lambda u, k, A=A: A.T  # Gradient of input-output mapping
 
@@ -41,10 +48,8 @@ class HybridController(WindFarmPowerDistributingController):
         # input constraints: (h for equality constraints, g for inequality constraints)
         g0 = lambda y, u, k, params, umax=self.umax: u - umax
         g1 = lambda y, u, k, params, umin=self.umin: umin - u
-        power_vals = self.params['wind_power_curve_poly_vals']
-        power_curve = lambda v, vals=power_vals: self.num_turbines*np.array([np.polyval(vals, v)]).reshape((self.nu,1))
-        self.power_curve = power_curve
-        g2 = lambda y, u, k, params, power_curve=power_curve: u - min(self.umax, power_curve(params['wind_speed']))
+
+        g2 = lambda y, u, k, params, power_curve=self.wind_power_curve: u - min(self.umax, power_curve(params['wind_speed']))
         nablag0 = lambda y, u, k, params: np.eye(self.nu)
         nablag1 = lambda y, u, k, params: -np.eye(self.nu)
         nablag2 = lambda y, u, k, params: np.eye(self.nu)
@@ -93,10 +98,10 @@ class HybridController(WindFarmPowerDistributingController):
         self.params['load_ref'] = ref
         self.params['wind_speed'] = wind_speed
         print('wind_speed = '+str(wind_speed))
-        print('max power =' +str(self.power_curve(wind_speed)))
+        print('max power =' +str(self.wind_power_curve(wind_speed)))
 
         # Apply hybrid control after initialization
-        if self.k > 2.0:
+        if self.k > 6.0:
             supervisory_reference = self.fo_control(y=np.array([[farm_current_power]]), k=self.k, w=self.params )
         else:
             supervisory_reference = self.fo_control.uk
