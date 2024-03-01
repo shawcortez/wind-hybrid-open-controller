@@ -3,7 +3,6 @@ from whoc.controllers.wake_steering_rosco_standin import WakeSteeringROSCOStandi
 from whoc.controllers.wind_battery_controller import WindBatteryController
 from whoc.controllers.wind_farm_power_tracking_controller import (
     WindFarmPowerDistributingController,
-    WindFarmPowerTrackingController,
-    WindPowerSupervisoryControl,
+    WindFarmPowerTrackingController
 )
 from whoc.controllers.supervisory_controller import HybridController

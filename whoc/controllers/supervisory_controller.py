@@ -10,12 +10,19 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
 
         # TO DO grab info from input_dict
         self.ny = 1
-        self.nu = len(input_dict['components'])
-        self.components = input_dict['components']
+        self.nu = len(input_dict['hybrid_controller']['components'])
+        self.components = input_dict['hybrid_controller']['components']
         self.dt = input_dict['dt']
-        self.gains = input_dict['hybrid_controller']['gains'] #{'eta': 0.4, 'beta': 1.0}
-        self.umax = np.array([3500.0]).reshape((self.nu,1))
-        self.umin = np.array([0.0]).reshape((self.nu,1))
+        self.gains = input_dict['hybrid_controller']['gains']
+        umax = []
+        umin = []
+        for component in self.components:
+            umax.append(input_dict['hybrid_controller']['max_reference'][component])
+            umin.append(0.0)
+        self.umax = np.array(umax).reshape((self.nu,1))
+        self.umin = np.array(umin).reshape((self.nu,1))
+        # self.umax = np.array([3500.0]).reshape((self.nu, 1))
+        # self.umin = np.array([0.0]).reshape((self.nu, 1))
         self.num_turbines = input_dict['controller']['num_turbines']
 
         # Initialize time
@@ -27,23 +34,28 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
             self.params['load_ref'] = 0.0
             wind_power_vals = input_dict['hybrid_controller']['power_curve']['wind']
             self.wind_power_curve = lambda v, vals=wind_power_vals: self.num_turbines * np.array([np.polyval(vals, v)]).reshape((1, 1))
+            a = input_dict['hybrid_controller']['set_point_to_power']['wind']['a']
+            b = input_dict['hybrid_controller']['set_point_to_power']['wind']['b']
+            self.params['dhw_dPwd'] = {'a': a, 'b': b}
 
         # Setup hybrid control
         self.setup_control()
 
     def setup_control(self):
 
-        dh_du = []
         if 'wind' in self.components:
-            dh_du.append(1.0)
+            dhw_dPwd = lambda x, a=self.params['dhw_dPwd']['a'], b=self.params['dhw_dPwd']['b']: np.exp(a*(x-b))/( 1.0 + np.exp(a*(x-b)))
+
         # Define outer-loop input-output mapping
-        A = np.array(dh_du).reshape((self.nu, 1))
+        A = lambda w: np.array(dhw_dPwd(w)).reshape((self.nu, 1))
         # H = lambda u, k, A=A, d=d: A @ u + d(k)  # Input-output mapping
-        nablaH = lambda u, k, A=A: A.T  # Gradient of input-output mapping
+        nablaH = lambda u, k, params, A=A: A(params['wind_speed']).T  # Gradient of input-output mapping
+
+        self.test = nablaH
 
         # Define cost function
         Cv = lambda y, u, k, params: 0.5 * (y - params['load_ref']) ** 2
-        nablaC = lambda y, u, k, params: nablaH(u, k) @ (y - params['load_ref'])
+        nablaC = lambda y, u, k, params: nablaH(u, k, params) @ (y - params['load_ref'])
 
         # input constraints: (h for equality constraints, g for inequality constraints)
         g0 = lambda y, u, k, params, umax=self.umax: u - umax
@@ -80,7 +92,7 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
 
         # Define initial condition
         # turbine_current_powers = self.measurements_dict["turbine_powers"]
-        u0 = np.array([[3000.0]])  # np.array([np.sum(turbine_current_powers)])
+        u0 = self.umax  # np.array([np.sum(turbine_current_powers)])
 
         self.fo_control = FeedbackOptimization(nablaH=nablaH, grad_cost=nablaC, constraints=constraints,
                                                grad_constraints=grad_constraints, gains=self.gains, integrator=integrator,
@@ -100,15 +112,20 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
         print('wind_speed = '+str(wind_speed))
         print('max power =' +str(self.wind_power_curve(wind_speed)))
 
+        print('dhw_dPwd = '+str(self.test(0,0,self.params)))
+
         # Apply hybrid control after initialization
         if self.k > 6.0:
             supervisory_reference = self.fo_control(y=np.array([[farm_current_power]]), k=self.k, w=self.params )
+            print('farm power ref = ' + str(supervisory_reference.flatten()[0]))
+            self.turbine_power_references(farm_power_reference=supervisory_reference.flatten()[0])
         else:
-            supervisory_reference = self.fo_control.uk
+            for ii in range(self.nu):
+                self.fo_control.uk[ii] = farm_current_power
+            self.turbine_power_references()
         self.k += self.dt
 
-        print('farm power ref = '+str(supervisory_reference.flatten()[0]))
-        self.turbine_power_references(farm_power_reference=supervisory_reference.flatten()[0])
+
 
 
 
