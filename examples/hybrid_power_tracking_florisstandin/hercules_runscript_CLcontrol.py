@@ -29,6 +29,8 @@ interface = HerculesADInterface(input_dict)
 
 print("Running closed-loop controller...")
 controller = HybridController(interface, input_dict)
+#controller = WindPowerSupervisoryControl(interface, input_dict)
+#controller = WindFarmPowerTrackingController(interface, input_dict)
 
 py_sims = PySims(input_dict)
 

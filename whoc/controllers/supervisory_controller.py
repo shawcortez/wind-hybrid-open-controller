@@ -13,6 +13,8 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
         self.nu = len(input_dict['hybrid_controller']['components'])
         self.components = input_dict['hybrid_controller']['components']
         self.dt = input_dict['dt']
+        self.init_time = input_dict['hybrid_controller']['init_time']
+        self.supervisory_dt = input_dict['hybrid_controller']['dt']
         self.gains = input_dict['hybrid_controller']['gains']
         umax = []
         umin = []
@@ -50,8 +52,6 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
         A = lambda w: np.array(dhw_dPwd(w)).reshape((self.nu, 1))
         # H = lambda u, k, A=A, d=d: A @ u + d(k)  # Input-output mapping
         nablaH = lambda u, k, params, A=A: A(params['wind_speed']).T  # Gradient of input-output mapping
-
-        self.test = nablaH
 
         # Define cost function
         Cv = lambda y, u, k, params: 0.5 * (y - params['load_ref']) ** 2
@@ -112,18 +112,22 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
         print('wind_speed = '+str(wind_speed))
         print('max power =' +str(self.wind_power_curve(wind_speed)))
 
-        print('dhw_dPwd = '+str(self.test(0,0,self.params)))
-
         # Apply hybrid control after initialization
-        if self.k > 6.0:
-            supervisory_reference = self.fo_control(y=np.array([[farm_current_power]]), k=self.k, w=self.params )
+        if (self.k > self.init_time):
+            if (self.k % self.supervisory_dt == 0):
+                supervisory_reference = self.fo_control(y=np.array([[farm_current_power]]), k=self.k, w=self.params )
+
+            else:
+                supervisory_reference = self.fo_control.uk
             print('farm power ref = ' + str(supervisory_reference.flatten()[0]))
             self.turbine_power_references(farm_power_reference=supervisory_reference.flatten()[0])
         else:
             for ii in range(self.nu):
                 self.fo_control.uk[ii] = farm_current_power
             self.turbine_power_references()
+
         self.k += self.dt
+
 
 
 

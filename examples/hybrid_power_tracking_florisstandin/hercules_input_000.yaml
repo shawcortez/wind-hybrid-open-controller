@@ -1,0 +1,83 @@
+# Input YAML for emy_python
+
+# Name
+name: example_000
+
+###
+# Describe this emulator setup
+description: Just a solar plant
+
+dt: 0.5
+
+hercules_comms:
+
+  amr_wind:
+
+    wind_farm_0:
+      type: amr_wind_local #options are amr_wind or amr_wind_local
+      amr_wind_input_file: amr_input.inp
+      yaw_simulator_name: yaw_system_0 # can also use "none" (without quotes)
+
+  helics:
+
+    config:
+        name: hercules # What is the purpose of this name
+        use_dash_frontend: False
+        KAFKA: False
+        KAFKA_topics: EMUV1py
+        helics: 
+            # deltat: 1 # This will be assigned in software
+            subscription_topics: [status]
+            publication_topics: [control]
+            endpoints: []
+            helicsport : 32000
+        publication_interval: 1
+        endpoint_interval: 1
+        starttime: 0
+        stoptime: 500
+        
+        Agent: ControlCenter
+
+py_sims:
+
+  solar_farm_0: # The name of py_sim object 1
+
+    py_sim_type: SimpleSolar
+    capacity: 50 # MW
+    efficiency: 0.5 #Fraction
+
+    initial_conditions:
+
+      power: 25 # MW
+      irradiance: 1000
+
+controller:
+
+  controller_type: SimpleYawController # This may not be needed
+  num_turbines: 2 # Should match AMR-Wind! Ideally, would come from AMR-wind
+  initial_conditions:
+      yaw: 270. # degrees (same for all turbines) (will this work?)
+
+hybrid_controller:
+  dt: 0.5      # Time-scale of hybrid controller (sec)
+  init_time: 6.0 # Initialization time
+  components: ['wind'] #['wind', 'battery']
+  gains:
+    eta: 0.4      # Gain on control udot = eta F
+    beta: 1.0     # Constraint gain: hdot \leq beta h
+  max_reference:
+    wind: 4000    # Max power set point (kW)
+  power_curve:
+    wind:  [  2.88615726 , 9.27308031, -35.0947898,  -14.43546939] # coefficients of 3rd order polynomial
+  set_point_to_power:
+    wind:           # Components of the smooth step function: dhw_dPwd = e^(a(x-b))/(1 + e^(a(x-b)))
+      a: 10.0
+      b: 3.09
+
+external_data_file: wind_power_reference_data.csv #power_reference_data.csv #
+
+
+
+
+
+

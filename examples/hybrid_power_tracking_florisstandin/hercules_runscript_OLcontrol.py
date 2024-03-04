@@ -17,18 +17,16 @@ import sys
 from hercules.emulator import Emulator
 from hercules.py_sims import PySims
 from hercules.utilities import load_yaml
-from whoc.controllers.wind_farm_power_tracking_controller import WindFarmPowerTrackingController
-from whoc.controllers.supervisory_controller import HybridController
-
+from whoc.controllers.wind_farm_power_tracking_controller import WindFarmPowerDistributingController
 from whoc.interfaces.hercules_actuator_disk_interface import HerculesADInterface
 
 input_dict = load_yaml(sys.argv[1])
-input_dict["output_file"] = "hercules_output_cl.csv"
+input_dict["output_file"] = "hercules_output_ol.csv"
 
 interface = HerculesADInterface(input_dict)
 
-print("Running closed-loop controller...")
-controller = HybridController(interface, input_dict)
+print("Running open-loop controller...")
+controller = WindFarmPowerDistributingController(interface, input_dict)
 
 py_sims = PySims(input_dict)
 
@@ -36,4 +34,4 @@ emulator = Emulator(controller, py_sims, input_dict)
 emulator.run_helics_setup()
 emulator.enter_execution(function_targets=[], function_arguments=[[]])
 
-print("Finished running closed-loop controller.")
+print("Finished running open-loop controller.")
