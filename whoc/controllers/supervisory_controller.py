@@ -46,7 +46,7 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
     def setup_control(self):
 
         if 'wind' in self.components:
-            dhw_dPwd = lambda x, a=self.params['dhw_dPwd']['a'], b=self.params['dhw_dPwd']['b']: np.exp(a*(x-b))/( 1.0 + np.exp(a*(x-b)))
+            dhw_dPwd = lambda x, a=self.params['dhw_dPwd']['a'], b=self.params['dhw_dPwd']['b']: 1.0 #np.exp(a*(x-b))/( 1.0 + np.exp(a*(x-b)))
 
         # Define outer-loop input-output mapping
         A = lambda w: np.array(dhw_dPwd(w)).reshape((self.nu, 1))
@@ -61,7 +61,7 @@ class HybridController(WindFarmPowerTrackingController): #HybridController(WindF
         g0 = lambda y, u, k, params, umax=self.umax: u - umax
         g1 = lambda y, u, k, params, umin=self.umin: umin - u
 
-        g2 = lambda y, u, k, params, power_curve=self.wind_power_curve: u - min(self.umax, power_curve(params['wind_speed']))
+        g2 = lambda y, u, k, params, power_curve=self.wind_power_curve: u - min(self.umax, max(0.0, power_curve(params['wind_speed'])))
         nablag0 = lambda y, u, k, params: np.eye(self.nu)
         nablag1 = lambda y, u, k, params: -np.eye(self.nu)
         nablag2 = lambda y, u, k, params: np.eye(self.nu)

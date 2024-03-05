@@ -59,11 +59,11 @@ controller:
       yaw: 270. # degrees (same for all turbines) (will this work?)
 
 hybrid_controller:
-  dt: 0.5      # Time-scale of hybrid controller (sec)
+  dt: 5.0 # 0.5      # Time-scale of hybrid controller (sec)
   init_time: 6.0 # Initialization time
   components: ['wind'] #['wind', 'battery']
   gains:
-    eta: 0.4      # Gain on control udot = eta F
+    eta: 1.0 #0.4      # Gain on control udot = eta F
     beta: 1.0     # Constraint gain: hdot \leq beta h
   max_reference:
     wind: 4000    # Max power set point (kW)
